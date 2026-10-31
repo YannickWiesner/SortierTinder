@@ -4,26 +4,21 @@ import tkinter as tk
 from tkinter import messagebox
 from send2trash import send2trash
 
-# Zum Testen. Später ändern zu: Path.home() / "Downloads"
-ORDNER = Path.home() / "Testordner"
-START_ZIEL = Path.home()
-
-# Ordner automatisch anlegen, falls er fehlt (sonst stürzt das Skript ab)
-ORDNER.mkdir(exist_ok=True)
-
-dateien = [d for d in ORDNER.iterdir() if d.is_file()]
+ORDNER = None                  # Ordner, der sortiert wird (wird beim Start gewählt)
+dateien = []
 index = 0
-aktueller_ordner = START_ZIEL
+aktueller_ordner = Path.home()  # Ordner, der gerade in der Liste angezeigt wird
 ordner_inhalt = []
-modus = "swipe"
+modus = "start"                 # "start" = Ordner zum Sortieren wählen, "swipe", "ordner" = Ziel wählen
 
 # ---------------- Swipe-Ansicht ----------------
 def zeige_datei():
+    ordner_info.config(text=f"Sortiere: {ORDNER}")
     if index < len(dateien):
         name_label.config(text=dateien[index].name)
         zaehler.config(text=f"{index + 1} von {len(dateien)}")
     elif not dateien:
-        name_label.config(text=f"Keine Dateien in\n{ORDNER}\n\nLeg ein paar Dateien hinein und starte neu.")
+        name_label.config(text=f"Keine Dateien in\n{ORDNER}\n\nAlles aufgeräumt! 🎉")
         zaehler.config(text="")
     else:
         name_label.config(text="Fertig! Alles sortiert 🎉")
@@ -53,17 +48,31 @@ def ueberspringen(event=None):
     index += 1
     zeige_datei()
 
-# ---------------- Ordner-Ansicht ----------------
+# ---------------- Ordner-Ansicht (für Start und für Ziel) ----------------
+def zeige_startwahl():
+    global modus
+    modus = "start"
+    swipe_ansicht.pack_forget()
+    ordner_ansicht.pack(fill="both", expand=True, padx=10, pady=10)
+    wohin_label.config(text="Welchen Ordner willst du sortieren?")
+    aktions_knopf.config(text="✅ Diesen Ordner sortieren")
+    abbrechen_knopf.pack_forget()
+    aktualisiere_liste()
+
 def zeige_ordnerwahl():
     global modus
     modus = "ordner"
     swipe_ansicht.pack_forget()
     ordner_ansicht.pack(fill="both", expand=True, padx=10, pady=10)
     wohin_label.config(text=f"Wohin mit: {dateien[index].name}")
+    aktions_knopf.config(text="✅ In diesen Ordner verschieben")
+    abbrechen_knopf.pack(side="left")
     aktualisiere_liste()
 
 def zurueck_zum_swipe(event=None):
     global modus
+    if modus == "start":
+        return  # Beim Start gibt es noch nichts, wohin man zurück kann
     modus = "swipe"
     ordner_ansicht.pack_forget()
     swipe_ansicht.pack(fill="both", expand=True)
@@ -110,6 +119,26 @@ def neuer_ordner(event=None):
     eingabe.delete(0, tk.END)
     aktualisiere_liste()
 
+def bestaetigen():
+    if modus == "start":
+        sortier_ordner_waehlen()
+    else:
+        hier_ablegen()
+
+def sortier_ordner_waehlen():
+    global ORDNER, dateien, index, aktueller_ordner, modus
+    try:
+        dateien = sorted([d for d in aktueller_ordner.iterdir() if d.is_file()],
+                         key=lambda d: d.name.lower())
+    except Exception as fehler:
+        messagebox.showerror("Fehler", f"Ordner kann nicht gelesen werden:\n{fehler}")
+        return
+    ORDNER = aktueller_ordner
+    index = 0
+    aktueller_ordner = Path.home()  # Zielauswahl startet wieder im Benutzerordner
+    modus = "ordner"                # damit zurueck_zum_swipe greift
+    zurueck_zum_swipe()
+
 def hier_ablegen():
     global index
     datei = dateien[index]
@@ -128,14 +157,19 @@ def hier_ablegen():
 # ---------------- Fenster aufbauen ----------------
 fenster = tk.Tk()
 fenster.title("Datei-Tinder")
-fenster.geometry("560x440")
+fenster.geometry("560x460")
 
 # Swipe-Ansicht
 swipe_ansicht = tk.Frame(fenster)
+oben = tk.Frame(swipe_ansicht)
+oben.pack(fill="x", padx=10, pady=(10, 0))
+ordner_info = tk.Label(oben, fg="gray", anchor="w")
+ordner_info.pack(side="left", fill="x", expand=True)
+tk.Button(oben, text="📂 Anderer Ordner", command=zeige_startwahl).pack(side="right")
 zaehler = tk.Label(swipe_ansicht, font=("Arial", 10))
 zaehler.pack(pady=10)
 name_label = tk.Label(swipe_ansicht, font=("Arial", 14), wraplength=500)
-name_label.pack(pady=60)
+name_label.pack(pady=50)
 knoepfe = tk.Frame(swipe_ansicht)
 knoepfe.pack()
 tk.Button(knoepfe, text="❌ Löschen (←)", width=15, command=links).pack(side="left", padx=8)
@@ -165,8 +199,9 @@ tk.Button(neu_zeile, text="➕ Neuer Ordner", command=neuer_ordner).pack(side="l
 
 aktion_zeile = tk.Frame(ordner_ansicht)
 aktion_zeile.pack(fill="x", pady=5)
-tk.Button(aktion_zeile, text="↩ Abbrechen (Esc)", command=zurueck_zum_swipe).pack(side="left")
-tk.Button(aktion_zeile, text="✅ In diesen Ordner verschieben", command=hier_ablegen).pack(side="right")
+abbrechen_knopf = tk.Button(aktion_zeile, text="↩ Abbrechen (Esc)", command=zurueck_zum_swipe)
+aktions_knopf = tk.Button(aktion_zeile, command=bestaetigen)
+aktions_knopf.pack(side="right")
 
 # Tasten
 fenster.bind("<Left>", links)
@@ -174,6 +209,5 @@ fenster.bind("<Right>", rechts)
 fenster.bind("<Down>", ueberspringen)
 fenster.bind("<Escape>", zurueck_zum_swipe)
 
-swipe_ansicht.pack(fill="both", expand=True)
-zeige_datei()
+zeige_startwahl()
 fenster.mainloop()
