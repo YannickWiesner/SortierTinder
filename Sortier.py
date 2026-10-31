@@ -8,6 +8,9 @@ from send2trash import send2trash
 ORDNER = Path.home() / "Testordner"
 START_ZIEL = Path.home()
 
+# Ordner automatisch anlegen, falls er fehlt (sonst stürzt das Skript ab)
+ORDNER.mkdir(exist_ok=True)
+
 dateien = [d for d in ORDNER.iterdir() if d.is_file()]
 index = 0
 aktueller_ordner = START_ZIEL
@@ -19,6 +22,9 @@ def zeige_datei():
     if index < len(dateien):
         name_label.config(text=dateien[index].name)
         zaehler.config(text=f"{index + 1} von {len(dateien)}")
+    elif not dateien:
+        name_label.config(text=f"Keine Dateien in\n{ORDNER}\n\nLeg ein paar Dateien hinein und starte neu.")
+        zaehler.config(text="")
     else:
         name_label.config(text="Fertig! Alles sortiert 🎉")
         zaehler.config(text="")
